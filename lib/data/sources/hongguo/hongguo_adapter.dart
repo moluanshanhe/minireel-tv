@@ -100,7 +100,7 @@ final class HongguoAdapter
           for (var i = 0; i < slice.length; i++)
             RankingItem(
               rank: start + i + 1,
-              metric: slice[i].heat > 0 ? '${slice[i].heat}热度' : '',
+              metric: (slice[i].heat ?? 0) > 0 ? '${slice[i].heat}热度' : '',
               drama: slice[i],
             ),
         ],
