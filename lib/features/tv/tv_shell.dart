@@ -12,6 +12,7 @@ import 'tv_focus.dart';
 import 'tv_library_screen.dart';
 import 'tv_mine_screen.dart';
 import 'tv_rankings_screen.dart';
+import 'tv_feed_screen.dart';
 import 'tv_player_screen.dart';
 import 'tv_settings_screen.dart';
 import 'tv_update_dialog.dart';
@@ -57,6 +58,29 @@ class _TVAppShellState extends State<TVAppShell> {
       );
     } finally {
       _openingPlayer = false;
+    }
+  }
+
+  Future<void> _openFeed([Drama? drama]) async {
+    if (_openingPlayer) return;
+    _openingPlayer = true;
+    try {
+      await Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          pageBuilder: (_, _, _) => TVFeedScreen(initialDrama: drama),
+          transitionDuration: const Duration(milliseconds: 240),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+          transitionsBuilder: (_, animation, _, child) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        ),
+      );
+    } finally {
+      _openingPlayer = false;
+      if (mounted) {
+        _applyContentEntry(_tab);
+      }
     }
   }
 
@@ -202,6 +226,7 @@ class _TVAppShellState extends State<TVAppShell> {
                 child: _TVNavigation(
                   selected: _tab,
                   onSelect: _selectTab,
+                  onOpenFeed: () => _openFeed(),
                 ),
               ),
               Expanded(
@@ -221,7 +246,11 @@ class _TVAppShellState extends State<TVAppShell> {
                       child: IndexedStack(
                         index: _tab,
                         children: [
-                          TVLibraryScreen(onPlay: _play, searchFocus: _searchFocus),
+                          TVLibraryScreen(
+                            onPlay: _play,
+                            searchFocus: _searchFocus,
+                            onOpenFeed: () => _openFeed(),
+                          ),
                           TVRankingsScreen(onPlay: _play),
                           TVMineScreen(
                             onPlay: _play,
@@ -248,9 +277,11 @@ class _TVNavigation extends StatelessWidget {
   const _TVNavigation({
     required this.selected,
     required this.onSelect,
+    required this.onOpenFeed,
   });
   final int selected;
   final ValueChanged<int> onSelect;
+  final VoidCallback onOpenFeed;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -272,7 +303,15 @@ class _TVNavigation extends StatelessWidget {
             letterSpacing: 1.5,
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+        _actionDestination(
+          context,
+          '刷短剧',
+          Icons.play_circle_fill_rounded,
+          onOpenFeed,
+          highlight: true,
+        ),
+        const SizedBox(height: 12),
         _destination(context, 0, '短剧库', Icons.movie_outlined, Icons.movie_rounded),
         const SizedBox(height: 10),
         _destination(context, 1, '热播榜', Icons.emoji_events_outlined, Icons.emoji_events_rounded),
@@ -284,6 +323,56 @@ class _TVNavigation extends StatelessWidget {
       ],
     ),
   );
+
+  Widget _actionDestination(
+    BuildContext context,
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    bool highlight = false,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: TVFocusable(
+          radius: 13,
+          onTap: onTap,
+          semanticLabel: label,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+            decoration: BoxDecoration(
+              color: highlight
+                  ? context.colors.primary.withValues(alpha: .18)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(13),
+              border: highlight
+                  ? Border.all(
+                      color: context.colors.primary.withValues(alpha: .45),
+                      width: 1.2,
+                    )
+                  : null,
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 3),
+                Icon(
+                  icon,
+                  size: 22,
+                  color: highlight ? context.colors.primary : context.muted,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
+                    color: highlight ? context.colors.primary : context.colors.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 
   Widget _destination(
     BuildContext context,

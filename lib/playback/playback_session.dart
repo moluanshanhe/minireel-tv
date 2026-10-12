@@ -75,6 +75,26 @@ final class PlaybackSession extends ChangeNotifier {
   Duration _requestedStart = Duration.zero;
   Future<void> _commands = Future.value();
 
+  Future<void> switchDrama(Drama newDrama, {int? initialEpisode}) async {
+    if (_disposed) return;
+    saveProgress();
+    drama = newDrama;
+    episodes = [];
+    currentIndex = 0;
+    options = null;
+    currentQuality = '原画';
+    error = null;
+    loadingMessage = null;
+    temporaryBoost = false;
+    _pauseReasons.clear();
+    _wantPlaying = true;
+    _completedHandled = false;
+    try {
+      engine.pause();
+    } catch (_) {}
+    await initialize(initialEpisode: initialEpisode);
+  }
+
   Future<void> initialize({int? initialEpisode}) async {
     trimPreload();
     final generation = ++_generation;

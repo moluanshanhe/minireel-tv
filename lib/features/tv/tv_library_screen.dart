@@ -18,10 +18,16 @@ import 'tv_search_screen.dart';
 /// 复用 LibraryScreen 的数据逻辑（channel/tag/filter/order），
 /// UI 改为 TV 适配：所有可交互元素用 TVFocusable 包裹，D-pad 可操作。
 class TVLibraryScreen extends StatefulWidget {
-  const TVLibraryScreen({super.key, required this.onPlay, required this.searchFocus});
+  const TVLibraryScreen({
+    super.key,
+    required this.onPlay,
+    required this.searchFocus,
+    this.onOpenFeed,
+  });
   final void Function(Drama drama, [int? episode]) onPlay;
   /// 顶部搜索框的焦点节点，由 TVAppShell 统一持有。
   final FocusNode searchFocus;
+  final VoidCallback? onOpenFeed;
   @override
   State<TVLibraryScreen> createState() => _TVLibraryScreenState();
 }
@@ -184,6 +190,45 @@ class _TVLibraryScreenState extends State<TVLibraryScreen> {
                             ),
                           ),
                         ),
+                        if (widget.onOpenFeed != null) ...[
+                          const SizedBox(width: 14),
+                          TVFocusable(
+                            radius: 20,
+                            semanticLabel: '遥控刷剧',
+                            onTap: widget.onOpenFeed,
+                            child: Container(
+                              height: 42,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: context.colors.primary.withValues(alpha: .18),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: context.colors.primary.withValues(alpha: .5),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.play_circle_fill_rounded,
+                                    size: 19,
+                                    color: context.colors.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '遥控刷剧',
+                                    style: TextStyle(
+                                      color: context.colors.primary,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 16),
                         const BrandMark(size: 36),
                       ],
