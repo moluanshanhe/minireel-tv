@@ -90,7 +90,7 @@ final class PlaybackSession extends ChangeNotifier {
     _wantPlaying = true;
     _completedHandled = false;
     try {
-      engine.pause();
+      await engine.stop();
     } catch (_) {}
     await initialize(initialEpisode: initialEpisode);
   }
