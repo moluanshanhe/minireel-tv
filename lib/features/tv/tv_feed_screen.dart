@@ -64,6 +64,8 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
   Duration? _seekPreview;
   String? _toastMessage;
   Timer? _toastTimer;
+  double _verticalDragDistance = 0.0;
+  double _horizontalDragDistance = 0.0;
 
   Drama? get _currentDrama =>
       (_feedList.isNotEmpty && _currentIndex >= 0 && _currentIndex < _feedList.length)
@@ -562,43 +564,99 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                   ),
                 ),
 
-                // 3. 点击画面呼出操作
+                // 3. 点击画面呼出操作 & 触控上下滑动切剧 / 左右滑动快进退
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _handleOkPress,
+                  child: Listener(
+                    onPointerSignal: (pointerSignal) {
+                      if (pointerSignal is PointerScrollEvent) {
+                        if (pointerSignal.scrollDelta.dy > 20) {
+                          _nextDrama();
+                        } else if (pointerSignal.scrollDelta.dy < -20) {
+                          _previousDrama();
+                        }
+                      }
+                    },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _handleOkPress,
+                      onVerticalDragStart: (_) {
+                        _verticalDragDistance = 0.0;
+                      },
+                      onVerticalDragUpdate: (details) {
+                        _verticalDragDistance += details.delta.dy;
+                      },
+                      onVerticalDragEnd: (details) {
+                        final velocity = details.primaryVelocity ?? 0.0;
+                        // 向上滑动（手指向上划，delta < 0 或速度 < 0）-> 下一部剧（Next Drama）
+                        if (velocity < -200 || _verticalDragDistance < -60) {
+                          if (_quickActionsOpen) {
+                            setState(() => _quickActionsOpen = false);
+                          }
+                          _nextDrama();
+                        }
+                        // 向下滑动（手指向下划，delta > 0 或速度 > 0）-> 上一部剧（Previous Drama）
+                        else if (velocity > 200 || _verticalDragDistance > 60) {
+                          if (_quickActionsOpen) {
+                            setState(() => _quickActionsOpen = false);
+                          }
+                          _previousDrama();
+                        }
+                        _verticalDragDistance = 0.0;
+                      },
+                      onHorizontalDragStart: (_) {
+                        _horizontalDragDistance = 0.0;
+                      },
+                      onHorizontalDragUpdate: (details) {
+                        _horizontalDragDistance += details.delta.dx;
+                      },
+                      onHorizontalDragEnd: (details) {
+                        final velocity = details.primaryVelocity ?? 0.0;
+                        final step = Duration(seconds: _app.preferences.seekStepSeconds);
+                        // 向右滑动：快进
+                        if (velocity > 250 || _horizontalDragDistance > 60) {
+                          _seekBy(step);
+                        }
+                        // 向左滑动：快退
+                        else if (velocity < -250 || _horizontalDragDistance < -60) {
+                          _seekBy(-step);
+                        }
+                        _horizontalDragDistance = 0.0;
+                      },
+                    ),
                   ),
                 ),
 
                 // 4. 加载中指示器
                 if (_loadingFeed || session?.buffering == true || _switchingDrama)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .6),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2.4),
-                          ),
-                          const SizedBox(width: 14),
-                          Text(
-                            _switchingDrama
-                                ? '正在换台...'
-                                : (session?.loadingMessage ?? '正在加载短剧...'),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w500,
+                  IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .6),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.4),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 14),
+                            Text(
+                              _switchingDrama
+                                  ? '正在换台...'
+                                  : (session?.loadingMessage ?? '正在加载短剧...'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -609,21 +667,23 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                     top: 48,
                     left: 0,
                     right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: .78),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white24, width: .8),
-                        ),
-                        child: Text(
-                          '${_formatDuration(_seekPreview!)} / ${_formatDuration(session.duration)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .78),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white24, width: .8),
+                          ),
+                          child: Text(
+                            '${_formatDuration(_seekPreview!)} / ${_formatDuration(session.duration)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1,
+                            ),
                           ),
                         ),
                       ),
@@ -636,28 +696,30 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                     top: 36,
                     left: 0,
                     right: 0,
-                    child: Center(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 200),
-                        opacity: _toastMessage != null ? 1.0 : 0.0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: context.colors.primary.withValues(alpha: .9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: .4),
-                                blurRadius: 12,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: _toastMessage != null ? 1.0 : 0.0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: context.colors.primary.withValues(alpha: .9),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: .4),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              _toastMessage!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            _toastMessage!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -766,13 +828,13 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _keyPill('↓', '换下一部'),
+                                _keyPill('↓ / 上滑', '换下一部'),
                                 const SizedBox(width: 12),
-                                _keyPill('↑', '换上一部'),
+                                _keyPill('↑ / 下滑', '换上一部'),
                                 const SizedBox(width: 12),
-                                _keyPill('←/→', '快退/快进'),
+                                _keyPill('←/→ / 滑动', '快退/快进'),
                                 const SizedBox(width: 12),
-                                _keyPill('OK', _quickActionsOpen ? '暂停/播放' : '追剧操作卡'),
+                                _keyPill('OK / 轻触', _quickActionsOpen ? '暂停/播放' : '追剧操作卡'),
                                 const SizedBox(width: 12),
                                 _keyPill('菜单', '选集'),
                                 const SizedBox(width: 12),
@@ -787,17 +849,19 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
 
                 // 8. 正在暂停大图标（若已暂停）
                 if (session != null && !session.playing && !session.buffering)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 46,
+                  IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 46,
+                        ),
                       ),
                     ),
                   ),

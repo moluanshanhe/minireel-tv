@@ -55,12 +55,67 @@ final class HongguoAdapter
     int page = 1,
     bool refresh = false,
     CancelToken? cancelToken,
-  }) => rankingService.load(
-    type,
-    page: page,
-    refresh: refresh,
-    cancelToken: cancelToken,
-  );
+  }) async {
+    try {
+      final res = await rankingService.load(
+        type,
+        page: page,
+        refresh: refresh,
+        cancelToken: cancelToken,
+      );
+      if (res.items.isNotEmpty) return res;
+    } on AppException catch (e) {
+      if (e.kind == FailureKind.cancelled) rethrow;
+    } catch (_) {}
+
+    return _fallbackRanking(type, page, cancelToken: cancelToken);
+  }
+
+  Future<RankingPage> _fallbackRanking(
+    RankingType type,
+    int page, {
+    CancelToken? cancelToken,
+  }) async {
+    final channel = switch (type) {
+      RankingType.hot => DramaChannel.real,
+      RankingType.realDrama => DramaChannel.real,
+      RankingType.comicDrama => DramaChannel.comicDrama,
+      RankingType.aiDrama => DramaChannel.ai,
+    };
+    try {
+      final catalog = await loadCatalog(
+        channel,
+        refresh: page == 1,
+        cancelToken: cancelToken,
+      );
+      final start = (page - 1) * pageSize;
+      final end = (start + pageSize).clamp(0, catalog.items.length);
+      final slice = (start < catalog.items.length)
+          ? catalog.items.sublist(start, end)
+          : <Drama>[];
+      return RankingPage(
+        type: type,
+        page: page,
+        items: [
+          for (var i = 0; i < slice.length; i++)
+            RankingItem(
+              rank: start + i + 1,
+              metric: slice[i].heat > 0 ? '${slice[i].heat}热度' : '',
+              drama: slice[i],
+            ),
+        ],
+        totalPages: maxPages,
+        updatedText: '精选热播推荐',
+      );
+    } catch (_) {
+      return RankingPage(
+        type: type,
+        page: page,
+        items: const [],
+        totalPages: 1,
+      );
+    }
+  }
 
   @override
   void clearTransientCache() {
