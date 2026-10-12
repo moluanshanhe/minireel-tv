@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
@@ -60,6 +61,12 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
   bool _awake = false;
   bool _closing = false;
 
+  int _hotRankingPage = 2;
+  int _realRankingPage = 2;
+  int _comicRankingPage = 1;
+  int _aiRankingPage = 1;
+  bool _loadingMoreDramas = false;
+
   Timer? _hideInfoTimer;
   Timer? _seekDebounce;
   Duration? _seekPreview;
@@ -110,12 +117,17 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
     if (widget.initialDramas != null && widget.initialDramas!.isNotEmpty) {
       list.addAll(widget.initialDramas!);
     } else {
-      // 优先加载热播榜
+      // 优先并行加载官方热播榜与真人短剧榜（官方最新热门推荐流）
       try {
-        final hotPage = await _app.repository.getRanking(RankingType.hot);
-        for (final item in hotPage.items) {
-          if (!list.any((d) => d.id == item.drama.id)) {
-            list.add(item.drama);
+        final results = await Future.wait([
+          _app.repository.getRanking(RankingType.hot, page: 1),
+          _app.repository.getRanking(RankingType.realDrama, page: 1),
+        ]);
+        for (final rankingPage in results) {
+          for (final item in rankingPage.items) {
+            if (!list.any((d) => d.id == item.drama.id)) {
+              list.add(item.drama);
+            }
           }
         }
       } catch (_) {}
@@ -153,11 +165,28 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
           _feedList.insert(0, widget.initialDrama!);
           _currentIndex = 0;
         }
+      } else if (_feedList.isNotEmpty) {
+        // 避免每次进入都是同一部剧：查询观看历史，优先挑选未看过的官方推荐剧
+        final watchedIds = _app.history.map((r) => r.drama.id).toSet();
+        final unwatchedCandidates = <int>[];
+        final poolLimit = min(_feedList.length, 15);
+        for (var i = 0; i < poolLimit; i++) {
+          if (!watchedIds.contains(_feedList[i].id)) {
+            unwatchedCandidates.add(i);
+          }
+        }
+        if (unwatchedCandidates.isNotEmpty) {
+          _currentIndex = unwatchedCandidates[Random().nextInt(unwatchedCandidates.length)];
+        } else {
+          _currentIndex = Random().nextInt(poolLimit);
+        }
       }
     });
 
     if (_feedList.isNotEmpty) {
       _startPlayCurrentDrama();
+      // 静默后台预加载后续更多官方榜单与分类流，让用户往下翻永不枯竭
+      unawaited(_loadMoreDramas());
     }
   }
 
@@ -187,28 +216,99 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
       // 静默拉取下一部剧的详情，提前写入本地缓存
       unawaited(_app.repository.getDetail(_feedList[nextIndex]));
     }
-    // 列表快见底时自动拉取更多
-    if (_currentIndex >= _feedList.length - 4) {
+    // 列表快见底时自动拉取更多官方推荐
+    if (_currentIndex >= _feedList.length - 5) {
       unawaited(_loadMoreDramas());
     }
   }
 
   Future<void> _loadMoreDramas() async {
+    if (_loadingMoreDramas || _closing || !mounted) return;
+    _loadingMoreDramas = true;
     try {
-      await _app.repository.loadMore();
+      final newDramas = <Drama>[];
+
+      // 1. 尝试从官方热播榜拉取下一页
+      if (_hotRankingPage <= 5) {
+        try {
+          final page = await _app.repository.getRanking(
+            RankingType.hot,
+            page: _hotRankingPage,
+          );
+          _hotRankingPage++;
+          for (final item in page.items) {
+            newDramas.add(item.drama);
+          }
+        } catch (_) {}
+      }
+
+      // 2. 尝试从官方真人短剧榜拉取下一页
+      if (_realRankingPage <= 5) {
+        try {
+          final page = await _app.repository.getRanking(
+            RankingType.realDrama,
+            page: _realRankingPage,
+          );
+          _realRankingPage++;
+          for (final item in page.items) {
+            newDramas.add(item.drama);
+          }
+        } catch (_) {}
+      }
+
+      // 3. 补充官方漫剧榜
+      if (_comicRankingPage <= 3) {
+        try {
+          final page = await _app.repository.getRanking(
+            RankingType.comicDrama,
+            page: _comicRankingPage,
+          );
+          _comicRankingPage++;
+          for (final item in page.items) {
+            newDramas.add(item.drama);
+          }
+        } catch (_) {}
+      }
+
+      // 4. 补充官方 AI 短剧榜
+      if (_aiRankingPage <= 3) {
+        try {
+          final page = await _app.repository.getRanking(
+            RankingType.aiDrama,
+            page: _aiRankingPage,
+          );
+          _aiRankingPage++;
+          for (final item in page.items) {
+            newDramas.add(item.drama);
+          }
+        } catch (_) {}
+      }
+
+      // 5. 官方剧库分页加载
+      try {
+        await _app.repository.loadMore();
+        for (final d in _app.repository.catalog) {
+          newDramas.add(d);
+        }
+      } catch (_) {}
+
       if (!mounted || _closing) return;
-      final catalog = _app.repository.catalog;
+
       var added = 0;
-      for (final d in catalog) {
+      for (final d in newDramas) {
         if (!_feedList.any((item) => item.id == d.id)) {
           _feedList.add(d);
           added++;
         }
       }
+
       if (added > 0 && mounted) {
         setState(() {});
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _loadingMoreDramas = false;
+    }
   }
 
   void _onSessionUpdate() {
@@ -253,7 +353,7 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
 
     if (_currentIndex + 1 >= _feedList.length) {
       _showToast('正在探索更多新剧...');
-      unawaited(_loadMoreDramas());
+      unawaited(_loadMoreAndAdvance());
       return;
     }
 
@@ -262,6 +362,51 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
     _quickActionsOpen = false;
     setState(() {});
     _startPlayCurrentDrama();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _switchingDrama = false;
+    });
+  }
+
+  Future<void> _loadMoreAndAdvance() async {
+    await _loadMoreDramas();
+    if (!mounted || _closing) return;
+    if (_currentIndex + 1 < _feedList.length) {
+      _nextDrama();
+    } else {
+      _showToast('暂无更多新剧了');
+    }
+  }
+
+  /// 换一部：随机换台到未看过的精选短剧
+  void _shuffleNextDrama() {
+    if (_switchingDrama || _sheetOpen || _feedList.isEmpty) return;
+    final watchedIds = _app.history.map((r) => r.drama.id).toSet();
+
+    final unwatchedIndices = <int>[];
+    for (var i = 0; i < _feedList.length; i++) {
+      if (i != _currentIndex && !watchedIds.contains(_feedList[i].id)) {
+        unwatchedIndices.add(i);
+      }
+    }
+
+    int targetIndex;
+    if (unwatchedIndices.isNotEmpty) {
+      targetIndex = unwatchedIndices[Random().nextInt(unwatchedIndices.length)];
+    } else if (_feedList.length > 1) {
+      final candidates = List.generate(_feedList.length, (i) => i)..remove(_currentIndex);
+      targetIndex = candidates[Random().nextInt(candidates.length)];
+    } else {
+      _showToast('正在寻找更多好剧...');
+      unawaited(_loadMoreDramas());
+      return;
+    }
+
+    _switchingDrama = true;
+    _currentIndex = targetIndex;
+    _quickActionsOpen = false;
+    setState(() {});
+    _startPlayCurrentDrama();
+    _showToast('🎲 已为您换台: 《${_currentDrama?.title ?? ''}》');
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _switchingDrama = false;
     });
@@ -461,6 +606,12 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
         key == LogicalKeyboardKey.mediaPause) {
       _session?.togglePlay();
       _showInfoTemporarily();
+      return KeyEventResult.handled;
+    }
+
+    // 快捷键: 键盘 R 或 S 键直接随机换一部
+    if (key == LogicalKeyboardKey.keyR || key == LogicalKeyboardKey.keyS) {
+      _shuffleNextDrama();
       return KeyEventResult.handled;
     }
 
@@ -837,6 +988,8 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                                 const SizedBox(width: 12),
                                 _keyPill('OK / 轻触', _quickActionsOpen ? '暂停/播放' : '追剧操作卡'),
                                 const SizedBox(width: 12),
+                                _keyPill('换一部', '随机换台'),
+                                const SizedBox(width: 12),
                                 _keyPill('菜单', '选集'),
                                 const SizedBox(width: 12),
                                 _keyPill('返回', '退出刷剧'),
@@ -884,6 +1037,12 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
           label: '完整追剧',
           highlight: true,
           onTap: _enterFullPlayer,
+        ),
+        const SizedBox(width: 10),
+        _quickButton(
+          icon: Icons.shuffle_rounded,
+          label: '换一部',
+          onTap: _shuffleNextDrama,
         ),
         const SizedBox(width: 10),
         _quickButton(
