@@ -18,12 +18,37 @@ final class HongguoMediaService {
     String videoId, {
     CancelToken? cancelToken,
   }) async {
-    final result = await client.post('/novel/player/video_model/v1/', {
-      'video_id': videoId,
-      'content_type': 1,
-      'biz_param': {'need_all_video_definition': true, 'video_platform': 3},
-    }, cancelToken: cancelToken);
-    final value = objectMap(result['data'])['video_model'];
+    final result = await client.post(
+      '/novel/player/multi_video_model/preload/v1',
+      {
+        'biz_param': {
+          'detail_page_version': 0,
+          'device_level': 3,
+          'disable_digg_stat': false,
+          'need_all_video_definition': true,
+          'need_mp4_align': false,
+          'use_os_player': false,
+          'use_server_dns': false,
+          'video_platform': 1024,
+        },
+        'dr_scene': 'preload',
+        'mixed_video_id_map': {
+          '1004': [videoId],
+        },
+      },
+      cancelToken: cancelToken,
+    );
+    final data = objectMap(result['data']);
+    final entry = objectMap(
+      data[videoId] ??
+          (data.isNotEmpty && !data.containsKey('video_model')
+              ? data.values.first
+              : null),
+    );
+    final value = entry['video_model'] ?? data['video_model'];
+    if (value == null) {
+      throw const AppException('App 未返回视频播放数据');
+    }
     try {
       return parse(objectMap(value is String ? jsonDecode(value) : value));
     } on FormatException {
@@ -41,14 +66,13 @@ final class HongguoMediaService {
         ? Duration(milliseconds: (seconds * 1000).round())
         : null;
     final sources = <({PlaybackSource source, int score})>[];
+    final fallbackSources = <({PlaybackSource source, int score})>[];
     for (final row in variants) {
       final variant = objectMap(row);
       final meta = objectMap(variant['video_meta']);
       final codec = field(meta, ['codec_type']).toLowerCase();
-      if (codec == 'bytevc2' ||
-          field(variant, ['gear_des_key']).toLowerCase().contains('bytevc2')) {
-        continue;
-      }
+      final isBytevc2 = codec == 'bytevc2' ||
+          field(variant, ['gear_des_key']).toLowerCase().contains('bytevc2');
       final uri = mediaUri(field(variant, ['main_url']));
       if (uri == null) continue;
       final encryption = objectMap(variant['encrypt_info']);
@@ -67,7 +91,7 @@ final class HongguoMediaService {
         );
         final height =
             definition ?? int.tryParse(field(meta, ['vheight'])) ?? 0;
-        sources.add((
+        final candidate = (
           source: PlaybackSource(
             uri: uri,
             kind: encrypted
@@ -83,17 +107,23 @@ final class HongguoMediaService {
           ),
           score:
               height * 10 + (['h264', 'avc1', 'avc'].contains(codec) ? 1 : 0),
-        ));
+        );
+        if (isBytevc2) {
+          fallbackSources.add(candidate);
+        } else {
+          sources.add(candidate);
+        }
       } on AppException {
         // A broken encrypted variant must not hide other playable variants.
         continue;
       }
     }
-    sources.sort((a, b) => b.score.compareTo(a.score));
-    if (sources.isEmpty) throw const AppException('App 未返回兼容的媒体');
+    final effective = sources.isNotEmpty ? sources : fallbackSources;
+    effective.sort((a, b) => b.score.compareTo(a.score));
+    if (effective.isEmpty) throw const AppException('App 未返回兼容的媒体');
     final qualities = <String>{};
     return PlaybackOptions([
-      for (final item in sources)
+      for (final item in effective)
         if (qualities.add(item.source.quality)) item.source,
     ]);
   }

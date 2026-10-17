@@ -98,7 +98,14 @@ final class HongguoWebFallback implements DramaSourceAdapter {
       throw const AppException('网页未返回所选分集');
     }
     final info = objectMap(page['video_player_info']);
-    final media = mediaUri(field(info, ['main_url']));
+    var rawUrl = field(info, ['main_url']);
+    if (rawUrl.isEmpty) {
+      final ldMatch = RegExp(r'"contentUrl"\s*:\s*"([^"]+)"').firstMatch(html);
+      if (ldMatch != null) {
+        rawUrl = ldMatch.group(1)?.replaceAll(r'\/', '/') ?? '';
+      }
+    }
+    final media = mediaUri(rawUrl);
     if (media == null) throw const AppException('网页暂未提供本集播放地址');
     final seconds = double.tryParse(field(info, ['duration']));
     return PlaybackSource(
