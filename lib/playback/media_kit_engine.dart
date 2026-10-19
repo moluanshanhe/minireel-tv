@@ -38,12 +38,11 @@ final class _MediaKitPlayer implements PlaybackEngine {
       player = Player(
         configuration: PlayerConfiguration(
           title: 'MiniReel',
-          bufferSize: _preloading
-              ? 4 * 1024 * 1024
-              : ((preferences?.playerBufferSizeMb ?? (Platform.isAndroid ? 16 : 32)) *
-                  1024 *
-                  1024),
-          muted: _preloading,
+          bufferSize: ((preferences?.playerBufferSizeMb ??
+                  (Platform.isAndroid ? 64 : 128)) *
+              1024 *
+              1024),
+          muted: false,
         ),
       ) {
     _errors = NativeErrorGuard(
@@ -97,6 +96,14 @@ final class _MediaKitPlayer implements PlaybackEngine {
 
   void updatePreferences(Preferences preferences) {
     _prefs = preferences;
+    final native = player.platform;
+    if (native is NativePlayer) {
+      final bufferMb = _prefs.playerBufferSizeMb;
+      final maxBytes = bufferMb * 1024 * 1024;
+      final backBytes = maxBytes ~/ 4;
+      native.setProperty('demuxer-max-bytes', '$maxBytes');
+      native.setProperty('demuxer-max-back-bytes', '$backBytes');
+    }
   }
 
   void _emit(EngineSnapshot next) {
@@ -136,6 +143,9 @@ final class _MediaKitPlayer implements PlaybackEngine {
           'reconnect_streamed=1',
           'reconnect_on_network_error=1',
           'reconnect_delay_max=2',
+          'reconnect_at_eof=1',
+          'buffer_size=1048576',
+          'http_persistent=1',
           if (source.kind == PlaybackKind.cenc)
             'decryption_key=${source.keyHex}',
         ].join(','),
@@ -153,16 +163,18 @@ final class _MediaKitPlayer implements PlaybackEngine {
       await native.setProperty('hwdec', hwdec);
       await native.setProperty('volume-max', '200');
 
-      // 缓冲区大小动态调优
+      // 缓冲区大小动态调优：激进预读，一次性缓存全集，抗网络抖动与卡顿
       final bufferMb = _prefs.playerBufferSizeMb;
-      final maxBytes = _preloading ? (4 * 1024 * 1024) : (bufferMb * 1024 * 1024);
-      final backBytes = _preloading ? 0 : (maxBytes ~/ 4);
-      final readaheadSecs = _preloading ? '12' : (bufferMb >= 32 ? '30' : '20');
+      final maxBytes = bufferMb * 1024 * 1024;
+      final backBytes = maxBytes ~/ 4;
+      const readaheadSecs = '300'; // 5分钟激进预读，极速预缓冲整集
 
       await native.setProperty('demuxer-max-bytes', '$maxBytes');
       await native.setProperty('demuxer-max-back-bytes', '$backBytes');
       await native.setProperty('cache-secs', readaheadSecs);
       await native.setProperty('demuxer-readahead-secs', readaheadSecs);
+      await native.setProperty('demuxer-hysteresis-secs', '10');
+      await native.setProperty('demuxer-lavf-buffersize', '2097152');
     } else if (source.kind == PlaybackKind.cenc) {
       throw const AppException('当前设备暂不支持这个视频格式');
     }
@@ -193,21 +205,7 @@ final class _MediaKitPlayer implements PlaybackEngine {
   @override
   Future<void> setPlaying(bool playing) async {
     if (_disposed) return;
-    if (playing && _preloading) {
-      final native = player.platform;
-      if (native is NativePlayer) {
-        final bufferMb = _prefs.playerBufferSizeMb;
-        final maxBytes = bufferMb * 1024 * 1024;
-        final backBytes = maxBytes ~/ 4;
-        final readaheadSecs = bufferMb >= 32 ? '30' : '20';
-        await native.setProperty('demuxer-max-bytes', '$maxBytes');
-        await native.setProperty('demuxer-max-back-bytes', '$backBytes');
-        await native.setProperty('cache-secs', readaheadSecs);
-        await native.setProperty('demuxer-readahead-secs', readaheadSecs);
-      }
-      _preloading = false;
-    }
-    if (_disposed) return;
+    _preloading = false;
     _errors.setPlaying(playing);
     if (playing) {
       await player.play();

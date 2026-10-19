@@ -10,6 +10,7 @@ import '../domain/models/drama.dart';
 import '../domain/models/playback_source.dart';
 import '../domain/models/watch_record.dart';
 import 'playback_engine.dart';
+import 'buffered_playback_engine.dart';
 import 'next_episode_prefetch.dart';
 
 /// Owns one viewing session. UI gestures express intent; this controller owns
@@ -59,7 +60,7 @@ final class PlaybackSession extends ChangeNotifier {
   Timer? _loadTimer;
   Timer? _prefetchTimer;
   Timer? _loadingIndicatorTimer;
-  final _prefetch = NextEpisodePrefetch(ttl: const Duration(minutes: 3));
+  final _prefetch = NextEpisodePrefetch(ttl: const Duration(minutes: 15));
   bool _usedPrefetch = false;
   int? _prefetchGeneration;
   DateTime? _preloadAfter;
@@ -168,18 +169,35 @@ final class PlaybackSession extends ChangeNotifier {
     _recoveryStep = recoveryStep;
     _requestedStart = resume;
     temporaryBoost = false;
-    snapshot = const EngineSnapshot();
-    options = null;
-    error = null;
-    resolving = true;
-    loadingMessage = message;
-    _completedHandled = false;
-    _notify();
+    final targetEpisode = episodes[index];
+    final isSeamlessCandidate = resume == Duration.zero &&
+        !fallbackOnly &&
+        startRoute == null &&
+        recoveryStep == 0 &&
+        engine is BufferedPlaybackEngine &&
+        (engine as BufferedPlaybackEngine).hasPreloadFor(targetEpisode.id);
+
+    if (!isSeamlessCandidate) {
+      snapshot = const EngineSnapshot();
+      options = null;
+      error = null;
+      resolving = true;
+      loadingMessage = message;
+      _completedHandled = false;
+      _notify();
+    } else {
+      error = null;
+      resolving = false;
+      loadingMessage = null;
+      _completedHandled = false;
+    }
     try {
-      await engine.stop();
-      if (!_current(generation)) return;
+      if (!isSeamlessCandidate) {
+        await engine.stop();
+        if (!_current(generation)) return;
+      }
       final cached = startRoute == null && !fallbackOnly
-          ? await _prefetch.take(episodes[index].id, token)
+          ? await _prefetch.take(targetEpisode.id, token)
           : null;
       if (!_current(generation)) return;
       if (cached == null) trimPreload();
@@ -188,7 +206,7 @@ final class PlaybackSession extends ChangeNotifier {
           cached ??
           await app.repository.resolve(
             drama,
-            episodes[index],
+            targetEpisode,
             cancelToken: token,
             fallbackOnly: fallbackOnly,
             startRoute: _route,
@@ -206,7 +224,7 @@ final class PlaybackSession extends ChangeNotifier {
         source,
         start: resume,
         isCurrent: () => _current(generation),
-        episodeId: episodes[index].id,
+        episodeId: targetEpisode.id,
       );
       if (!_current(generation)) return;
       await engine.setRate(rate);
@@ -366,7 +384,7 @@ final class PlaybackSession extends ChangeNotifier {
       return;
     }
     final next = episodes[currentIndex + 1];
-    _prefetchTimer = Timer(const Duration(milliseconds: 800), () {
+    _prefetchTimer = Timer(const Duration(milliseconds: 300), () {
       if (!_current(generation) ||
           !ready ||
           !playing ||
@@ -381,23 +399,30 @@ final class PlaybackSession extends ChangeNotifier {
         (preloader as PreloadingPlaybackEngine).discardPreload();
       }
       _prefetch.start(next.id, (token) async {
-        final resolved = await app.repository.resolve(
-          drama,
-          next,
-          cancelToken: token,
-        );
-        token.throwIfCancellationRequested();
-        if (!_disposed && preloader is PreloadingPlaybackEngine) {
-          unawaited(
-            (preloader as PreloadingPlaybackEngine)
-                .preload(
-                  resolved.select(app.preferences.quality),
-                  episodeId: next.id,
-                )
-                .catchError((Object _) {}),
+        try {
+          final resolved = await app.repository.resolve(
+            drama,
+            next,
+            cancelToken: token,
           );
+          token.throwIfCancellationRequested();
+          if (!_disposed && preloader is PreloadingPlaybackEngine) {
+            unawaited(
+              (preloader as PreloadingPlaybackEngine)
+                  .preload(
+                    resolved.select(app.preferences.quality),
+                    episodeId: next.id,
+                  )
+                  .catchError((Object _) {}),
+            );
+          }
+          return resolved;
+        } catch (_) {
+          if (_current(generation) && _prefetchGeneration == generation) {
+            _prefetchGeneration = null;
+          }
+          rethrow;
         }
-        return resolved;
       });
     });
   }
@@ -512,7 +537,6 @@ final class PlaybackSession extends ChangeNotifier {
     }
     if (snapshot.buffering) {
       _armLoadTimeout();
-      if (_prefetchGeneration == _generation) trimPreload();
     }
     if (playing && !buffering) _schedulePrefetch(_generation);
     if (snapshot.completed && !_completedHandled && !resolving) {

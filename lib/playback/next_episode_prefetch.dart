@@ -6,7 +6,7 @@ import '../domain/models/playback_source.dart';
 /// One transient playback resolution, never media bytes or disk storage.
 final class NextEpisodePrefetch {
   NextEpisodePrefetch({
-    this.ttl = const Duration(seconds: 60),
+    this.ttl = const Duration(minutes: 15),
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
   final Duration ttl;
@@ -30,6 +30,9 @@ final class NextEpisodePrefetch {
         token.throwIfCancellationRequested();
         return result;
       } on Exception {
+        if (_id == id) {
+          clear();
+        }
         return null;
       }
     })();

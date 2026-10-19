@@ -106,10 +106,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'no': '纯软解兼容',
     };
     const bufferSizeOptions = {
-      8: '8 MB (极速省流)',
-      16: '16 MB (标准推荐)',
-      32: '32 MB (增强缓冲)',
-      64: '64 MB (超大缓冲)',
+      16: '16 MB (极速省流)',
+      32: '32 MB (标准平衡)',
+      64: '64 MB (超大缓冲·无缝秒播·推荐)',
+      128: '128 MB (极速预载·完全不卡)',
+      256: '256 MB (海量内存·极致缓存)',
     };
     const audioBoostOptions = {
       0: '原始音量 (100%)',

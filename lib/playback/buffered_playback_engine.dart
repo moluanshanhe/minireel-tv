@@ -48,6 +48,15 @@ class BufferedPlaybackEngine
   String? get activeEpisodeId => _active.episodeId;
   String? get preloadedEpisodeId => _standby?.episodeId;
 
+  /// Returns true if the standby engine is preloaded for the specified episode and ready to promote.
+  bool hasPreloadFor(String episodeId) {
+    final prepared = _standby;
+    return prepared != null &&
+        prepared.episodeId == episodeId &&
+        !prepared.disposed &&
+        prepared.engine.state.value.error == null;
+  }
+
   PlaybackEngine? engineForEpisode(String episodeId) {
     if (_active.episodeId == episodeId) return _active.engine;
     final standby = _standby;
@@ -150,7 +159,8 @@ class BufferedPlaybackEngine
     final prepared = _standby;
     final canPromote =
         prepared != null &&
-        identical(prepared.source, source) &&
+        (identical(prepared.source, source) ||
+            prepared.source?.uri == source.uri) &&
         prepared.episodeId == episodeId &&
         start == Duration.zero &&
         prepared.engine.state.value.error == null;

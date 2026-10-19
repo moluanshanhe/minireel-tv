@@ -32,7 +32,7 @@ final class Preferences {
     this.autoCheckUpdate = true,
     this.accentColorKey = 'default',
     this.hardwareDecoding = 'auto',
-    this.playerBufferSizeMb = 16,
+    this.playerBufferSizeMb = 64,
     this.audioBoost = 0,
     this.playerGlassEffect = true,
     this.tvColumns = 0,
@@ -71,7 +71,7 @@ final class Preferences {
   final String accentColorKey;
   /// 硬件解码：'auto' (自动硬解·推荐), 'mediacodec' (强制硬解), 'no' (兼容软解)
   final String hardwareDecoding;
-  /// 播放缓冲区大小（MB）：8, 16, 32, 64
+  /// 播放缓冲区大小（MB）：16, 32, 64, 128, 256
   final int playerBufferSizeMb;
   /// 音量与人声增强（百分比）：0 (原始), 25 (+25%), 50 (+50%), 100 (+100%)
   final int audioBoost;

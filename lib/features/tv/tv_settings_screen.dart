@@ -145,10 +145,11 @@ class _TVSettingsScreenState extends State<TVSettingsScreen> {
       'no': '纯软解兼容（绿屏/黑屏时使用）',
     };
     const bufferSizeOptions = {
-      8: '8 MB（极速省流·省内存）',
-      16: '16 MB（标准平衡·推荐）',
-      32: '32 MB（增强缓冲·更抗抖动）',
-      64: '64 MB（超大缓冲·极限抗卡顿）',
+      16: '16 MB（极速省流·省内存）',
+      32: '32 MB（标准平衡）',
+      64: '64 MB（超大缓冲·无缝秒播·推荐）',
+      128: '128 MB（极速全集预载·完全不卡）',
+      256: '256 MB（海量内存·极致极速缓存）',
     };
     const audioBoostOptions = {
       0: '原始音量（100% 标准输出）',
