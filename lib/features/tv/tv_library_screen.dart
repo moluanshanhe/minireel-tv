@@ -23,11 +23,13 @@ class TVLibraryScreen extends StatefulWidget {
     required this.onPlay,
     required this.searchFocus,
     this.onOpenFeed,
+    this.onOpenSettings,
   });
   final void Function(Drama drama, [int? episode]) onPlay;
   /// 顶部搜索框的焦点节点，由 TVAppShell 统一持有。
   final FocusNode searchFocus;
   final VoidCallback? onOpenFeed;
+  final VoidCallback? onOpenSettings;
   @override
   State<TVLibraryScreen> createState() => _TVLibraryScreenState();
 }
@@ -222,6 +224,37 @@ class _TVLibraryScreenState extends State<TVLibraryScreen> {
                                       color: context.colors.primary,
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (widget.onOpenSettings != null) ...[
+                          const SizedBox(width: 14),
+                          TVFocusable(
+                            radius: 20,
+                            semanticLabel: '设置',
+                            onTap: widget.onOpenSettings,
+                            child: Container(
+                              height: 42,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: context.chipColor,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.tune_rounded, size: 18, color: context.muted),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '设置',
+                                    style: TextStyle(
+                                      color: context.colors.onSurface,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],

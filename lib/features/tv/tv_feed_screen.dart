@@ -555,7 +555,10 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
     final step = Duration(seconds: _app.preferences.seekStepSeconds);
 
     // 返回键
-    if (keyMap.matches(RemoteAction.back, key)) {
+    if (keyMap.matches(RemoteAction.back, key) ||
+        key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.backspace) {
       if (_quickActionsOpen) {
         setState(() => _quickActionsOpen = false);
         _showInfoTemporarily();
@@ -631,7 +634,7 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
 
   void _exit() {
     _cleanup();
-    if (mounted) Navigator.of(context).maybePop();
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -659,14 +662,19 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
     return Theme(
       data: ReelTheme.make(Brightness.dark, _app.preferences.accentColorKey),
       child: PopScope(
-        canPop: false,
+        canPop: !_quickActionsOpen && !_sheetOpen,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) {
+          if (didPop) {
+            _cleanup();
+          } else {
             if (_quickActionsOpen) {
               setState(() => _quickActionsOpen = false);
-              return;
+              _showInfoTemporarily();
+            } else if (_sheetOpen) {
+              Navigator.of(context).pop();
+            } else {
+              _exit();
             }
-            _exit();
           }
         },
         child: Scaffold(
@@ -879,7 +887,36 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                     ),
                   ),
 
-                // 7. 剧名与剧集信息（左下角浮层）
+                // 7. 顶部左上角返回按钮
+                Positioned(
+                  top: 28,
+                  left: 28,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 320),
+                    opacity: (_infoVisible || _quickActionsOpen) ? 1.0 : 0.0,
+                    child: TVFocusable(
+                      radius: 22,
+                      semanticLabel: '返回',
+                      onTap: _exit,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .5),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white12, width: 1),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 8. 剧名浮层（左下角，仅保留短剧名）
                 if (drama != null)
                   Positioned(
                     left: 36,
@@ -887,115 +924,27 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
                     right: 36,
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 320),
-                      opacity: _infoVisible ? 1.0 : 0.15,
+                      opacity: (_infoVisible || _quickActionsOpen) ? 1.0 : 0.0,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 剧名与热度/集数
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                drama.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w800,
-                                  shadows: [
-                                    Shadow(color: Colors.black87, blurRadius: 10),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: context.colors.primary.withValues(alpha: .85),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '第 ${session?.episode?.index ?? 1} 集 / 共 ${drama.episodeCount} 集',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              if (drama.tags.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  drama.tags.take(3).map((t) => '#$t').join(' '),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                    shadows: [
-                                      Shadow(color: Colors.black, blurRadius: 8),
-                                    ],
-                                  ),
-                                ),
+                          Text(
+                            drama.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              shadows: [
+                                Shadow(color: Colors.black87, blurRadius: 10),
+                                Shadow(color: Colors.black54, blurRadius: 20),
                               ],
-                            ],
-                          ),
-
-                          // 简介（两行）
-                          if (drama.intro.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 620),
-                              child: Text(
-                                drama.intro,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  height: 1.45,
-                                  shadows: [
-                                    Shadow(color: Colors.black, blurRadius: 8),
-                                  ],
-                                ),
-                              ),
                             ),
-                          ],
-
-                          const SizedBox(height: 14),
-
-                          // 快速操作栏（当按 OK 呼出时）
+                          ),
                           if (_quickActionsOpen) ...[
+                            const SizedBox(height: 14),
                             _buildQuickActionButtons(context, drama),
-                            const SizedBox(height: 12),
                           ],
-
-                          // 遥控器按键指南
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: .5),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white12, width: .8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _keyPill('↓ / 上滑', '换下一部'),
-                                const SizedBox(width: 12),
-                                _keyPill('↑ / 下滑', '换上一部'),
-                                const SizedBox(width: 12),
-                                _keyPill('←/→ / 滑动', '快退/快进'),
-                                const SizedBox(width: 12),
-                                _keyPill('OK / 轻触', _quickActionsOpen ? '暂停/播放' : '追剧操作卡'),
-                                const SizedBox(width: 12),
-                                _keyPill('换一部', '随机换台'),
-                                const SizedBox(width: 12),
-                                _keyPill('菜单', '选集'),
-                                const SizedBox(width: 12),
-                                _keyPill('返回', '退出刷剧'),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1117,34 +1066,6 @@ class _TVFeedScreenState extends State<TVFeedScreen> with WidgetsBindingObserver
     ),
   );
 
-  Widget _keyPill(String key, String desc) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-        decoration: BoxDecoration(
-          color: Colors.white24,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          key,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      const SizedBox(width: 5),
-      Text(
-        desc,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 12,
-        ),
-      ),
-    ],
-  );
 
   String _formatDuration(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');

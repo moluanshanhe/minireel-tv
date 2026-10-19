@@ -250,6 +250,7 @@ class _TVAppShellState extends State<TVAppShell> {
                             onPlay: _play,
                             searchFocus: _searchFocus,
                             onOpenFeed: () => _openFeed(),
+                            onOpenSettings: () => _selectTab(3),
                           ),
                           TVRankingsScreen(onPlay: _play),
                           TVMineScreen(
@@ -289,38 +290,43 @@ class _TVNavigation extends StatelessWidget {
     decoration: BoxDecoration(
       color: context.colors.surface,
     ),
-    child: Column(
-      children: [
-        const SizedBox(height: 28),
-        const BrandMark(size: 40),
-        const SizedBox(height: 8),
-        Text(
-          'MiniReel',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: context.muted,
-            letterSpacing: 1.5,
-          ),
+    child: SafeArea(
+      right: false,
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            const BrandMark(size: 38),
+            const SizedBox(height: 6),
+            Text(
+              'MiniReel',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: context.muted,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _actionDestination(
+              context,
+              '刷短剧',
+              Icons.play_circle_fill_rounded,
+              onOpenFeed,
+              highlight: true,
+            ),
+            const SizedBox(height: 10),
+            _destination(context, 0, '短剧库', Icons.movie_outlined, Icons.movie_rounded),
+            const SizedBox(height: 8),
+            _destination(context, 1, '热播榜', Icons.emoji_events_outlined, Icons.emoji_events_rounded),
+            const SizedBox(height: 8),
+            _destination(context, 2, '我的', Icons.person_outline_rounded, Icons.person_rounded),
+            const SizedBox(height: 8),
+            _destination(context, 3, '设置', Icons.tune_rounded, Icons.tune_rounded),
+            const SizedBox(height: 24),
+          ],
         ),
-        const SizedBox(height: 24),
-        _actionDestination(
-          context,
-          '刷短剧',
-          Icons.play_circle_fill_rounded,
-          onOpenFeed,
-          highlight: true,
-        ),
-        const SizedBox(height: 12),
-        _destination(context, 0, '短剧库', Icons.movie_outlined, Icons.movie_rounded),
-        const SizedBox(height: 10),
-        _destination(context, 1, '热播榜', Icons.emoji_events_outlined, Icons.emoji_events_rounded),
-        const SizedBox(height: 10),
-        _destination(context, 2, '我的', Icons.person_outline_rounded, Icons.person_rounded),
-        const Spacer(),
-        _destination(context, 3, '设置', Icons.tune_rounded, Icons.tune_rounded),
-        const SizedBox(height: 28),
-      ],
+      ),
     ),
   );
 
