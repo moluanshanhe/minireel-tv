@@ -99,7 +99,7 @@ lib/
 4. 构造 `DramaRepository` + `AppController`，调用 `app.initialize()`
 5. Windows 下注册 `onAppClose` 回调做优雅关闭（flush → dispose → close）
 
-启动失败时显示"本地数据暂时无法读取"并提供重试按钮。
+启动失败时记录真实异常与堆栈，显示初始化错误摘要并提供重试按钮。
 
 ### 5.2 全局状态（`app_controller.dart`）
 

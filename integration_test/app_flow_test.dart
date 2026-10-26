@@ -135,6 +135,21 @@ void main() {
         ),
         true,
       );
+
+      // 菜单退出必须关闭播放路由，而不只是关闭底部菜单。
+      await tester.tap(find.byType(DramaCard).first);
+      await until(
+        () => find.byType(PlayerScreen).evaluate().isNotEmpty,
+        'reopen player',
+      );
+      await tester.tap(find.byKey(const ValueKey('player-menu')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('退出播放'));
+      await until(
+        () => find.byType(PlayerScreen).evaluate().isEmpty,
+        'exit player from menu',
+      );
+
       await tester.tap(find.byKey(const ValueKey('tab-1')));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.textContaining('收藏'), findsWidgets);

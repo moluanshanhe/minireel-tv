@@ -38,13 +38,9 @@ final class SqliteAppStore implements AppStore, SourceStateStore {
       file,
       options: OpenDatabaseOptions(
         version: 1,
-        onConfigure: (db) async {
-          // 启用 WAL 模式和快速同步，大幅提升 Android 闪存上的读写与并发吞吐量
-          await db.execute('PRAGMA journal_mode = WAL');
-          await db.execute('PRAGMA synchronous = NORMAL');
-          await db.execute('PRAGMA temp_store = MEMORY');
-          await db.execute('PRAGMA mmap_size = 33554432');
-        },
+        // 不在打开数据库时强制执行 WAL、mmap 等可选性能参数。
+        // 部分 Android TV/盒子的 SQLite 实现不支持这些 PRAGMA，
+        // 启动优化不能阻断本地数据库打开。
         onCreate: (db, version) async {
           await db.execute(
             'CREATE TABLE catalog (id TEXT PRIMARY KEY, source TEXT NOT NULL, payload TEXT NOT NULL)',

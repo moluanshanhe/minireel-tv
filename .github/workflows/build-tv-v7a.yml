@@ -97,6 +97,11 @@ jobs:
       - name: Flutter dependencies
         run: flutter pub get --enforce-lockfile
 
+      - name: Analyze and test
+        run: |
+          flutter analyze --no-pub
+          flutter test test --no-pub
+
       - name: Build Android TV APK (split-per-abi)
         run: |
           flutter build apk --release --flavor tv --split-per-abi

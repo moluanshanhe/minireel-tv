@@ -345,6 +345,16 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  Future<void> _exitPlayer() async {
+    if (_closing) return;
+    if (_locked) _setLocked(false);
+    if (_landscape) unawaited(_setLandscape(false));
+    if (!mounted) return;
+    // PopScope 在横屏或锁定时禁止返回，等待上述状态完成重建后再退出。
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) await Navigator.of(context).maybePop();
+  }
+
   void _dismissHint() {
     _app.setPreferences(_app.preferences.copyWith(gestureHintSeen: true));
     setState(() => _hint = false);
@@ -1039,7 +1049,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         );
         if (!mounted) break;
         if (result == _Panel.exit) {
-          Navigator.of(context).pop();
+          await _exitPlayer();
           break;
         }
         if (result is _Panel) {

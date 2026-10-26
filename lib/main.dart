@@ -79,40 +79,53 @@ class _MiniReelBootstrapState extends State<MiniReelBootstrap> {
   }
 
   Future<AppController> _initialize() async {
-    final configFuture =
-        rootBundle.loadString('assets/config/sources.json').then((str) {
-      final raw = jsonDecode(str) as Map<String, dynamic>;
-      return SourceConfig.fromJson(
+    AppHttpClient? http;
+    SqliteAppStore? store;
+    try {
+      final raw =
+          jsonDecode(await rootBundle.loadString('assets/config/sources.json'))
+              as Map<String, dynamic>;
+      final config = SourceConfig.fromJson(
         raw['sources']['hongguo'] as Map<String, dynamic>,
       );
-    });
-    final storeFuture = SqliteAppStore.open();
-
-    final config = await configFuture;
-    final http = _http = AppHttpClient(config);
-    final store = await storeFuture;
-    try {
+      final client = AppHttpClient(config);
+      http = client;
+      _http = client;
+      final openedStore = await SqliteAppStore.open();
+      store = openedStore;
       final repository = DramaRepository(
         SourceRegistry([
-          if (config.enabled) HongguoAdapter(config, http, store: store),
+          if (config.enabled)
+            HongguoAdapter(config, client, store: openedStore),
         ]),
-        store,
+        openedStore,
       );
-      final app = AppController(store, repository);
+      final app = AppController(openedStore, repository);
       await app.initialize();
       _app = app;
       if (Platform.isWindows) {
         DesktopWindow.instance.onAppClose = () async {
           await app.flush();
           app.repository.dispose();
-          http.close();
-          await store.close();
+          client.close();
+          await openedStore.close();
         };
       }
       return app;
-    } on Exception {
-      await store.close();
-      http.close();
+    } catch (error, stackTrace) {
+      // Release 构建也要保留真实原因，便于通过 logcat 定位设备兼容问题。
+      debugPrint('MiniReel startup failed: $error');
+      debugPrintStack(stackTrace: stackTrace, label: 'MiniReel startup stack');
+      final openedStore = store;
+      if (openedStore != null) {
+        try {
+          await openedStore.close();
+        } catch (closeError) {
+          debugPrint('MiniReel startup cleanup failed: $closeError');
+        }
+      }
+      http?.close();
+      if (identical(_http, http)) _http = null;
       rethrow;
     }
   }
@@ -169,10 +182,28 @@ class _MiniReelBootstrapState extends State<MiniReelBootstrap> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    snapshot.hasError ? '本地数据暂时无法读取，请检查可用存储空间' : '好故事，随时开场',
+                    snapshot.hasError ? '应用初始化失败，请重试' : '好故事，随时开场',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
+                  if (snapshot.hasError)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 26),
                   if (snapshot.hasError)
                     FilledButton(

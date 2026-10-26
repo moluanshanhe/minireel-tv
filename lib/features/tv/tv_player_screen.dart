@@ -401,7 +401,7 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
           child: OutlinedButton.icon(
             onPressed: () {
               Navigator.of(context).pop();
-              _exit();
+              unawaited(_exit());
             },
             icon: const Icon(Icons.logout_rounded, size: 19),
             label: const Text('退出播放'),
@@ -772,10 +772,17 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
     unawaited(_session.close());
   }
 
-  void _exit() {
+  Future<void> _exit() async {
     if (_closing) return;
     _cleanup();
-    if (mounted) Navigator.of(context).maybePop();
+    if (!mounted) return;
+    if (_sheetOpen) {
+      // 菜单打开时 PopScope 禁止返回。先解除状态并等待重建，
+      // 否则同步 maybePop 会被拦截，页面还会停留在 _closing 状态。
+      setState(() => _sheetOpen = false);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (mounted) await Navigator.of(context).maybePop();
   }
 
   @override
@@ -815,7 +822,7 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
         setState(() => _controlsVisible = false);
         _hideTimer?.cancel();
       } else {
-        _exit();
+        unawaited(_exit());
       }
       return KeyEventResult.handled;
     }
