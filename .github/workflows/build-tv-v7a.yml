@@ -1,4 +1,4 @@
-name: Build Android TV
+name: Build Android (Phone + TV)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Android TV v7a
+    name: Build Android Phone & TV APKs
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -97,32 +97,40 @@ jobs:
       - name: Flutter dependencies
         run: flutter pub get --enforce-lockfile
 
-      - name: Build Android TV APK (split-per-abi)
+      - name: Build Android APKs (Phone & TV split-per-abi)
         run: |
+          echo "=== Building Android TV APKs ==="
           flutter build apk --release --flavor tv --split-per-abi
+          echo "=== Building Android Phone APKs ==="
+          flutter build apk --release --flavor phone --split-per-abi
 
       - name: Organize output APKs
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
           mkdir -p output
           
-          # 核心产物：armeabi-v7a (32位 Android TV / 电视机顶盒通用架构)
+          # 📺 TV 版产物
           if [ -f build/app/outputs/flutter-apk/app-armeabi-v7a-tv-release.apk ]; then
             cp build/app/outputs/flutter-apk/app-armeabi-v7a-tv-release.apk output/MiniReel-${VERSION}-tv-armeabi-v7a.apk
           fi
-          
-          # 补充产物：arm64-v8a (64位 Android TV 架构备用)
           if [ -f build/app/outputs/flutter-apk/app-arm64-v8a-tv-release.apk ]; then
             cp build/app/outputs/flutter-apk/app-arm64-v8a-tv-release.apk output/MiniReel-${VERSION}-tv-arm64-v8a.apk
           fi
           
+          # 📱 手机版产物
+          if [ -f build/app/outputs/flutter-apk/app-arm64-v8a-phone-release.apk ]; then
+            cp build/app/outputs/flutter-apk/app-arm64-v8a-phone-release.apk output/MiniReel-${VERSION}-phone-arm64-v8a.apk
+          fi
+          if [ -f build/app/outputs/flutter-apk/app-armeabi-v7a-phone-release.apk ]; then
+            cp build/app/outputs/flutter-apk/app-armeabi-v7a-phone-release.apk output/MiniReel-${VERSION}-phone-armeabi-v7a.apk
+          fi
+          
           ls -lh output/
-
 
       - name: Upload APKs as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MiniReel-Android-TV-APKs
+          name: MiniReel-Android-APKs
           path: output/*.apk
           retention-days: 30
 
@@ -132,7 +140,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
-          TAG_NAME="v${VERSION}-tv-build-${{ github.run_number }}"
+          TAG_NAME="v${VERSION}-build-${{ github.run_number }}"
           gh release create "$TAG_NAME" output/*.apk \
-            --title "MiniReel v${VERSION} Android TV (含 v7a)" \
-            --notes "MiniReel Android TV 在线编译版本 (v${VERSION})"
+            --title "MiniReel v${VERSION} Android (手机版 + TV版)" \
+            --notes "MiniReel Android 在线编译发布版本 (v${VERSION})
+
+          ### 📱 手机优化版（竖屏切集·触屏手势）
+          - \`MiniReel-${VERSION}-phone-arm64-v8a.apk\`：绝大多数现代手机推荐（64位）
+          - \`MiniReel-${VERSION}-phone-armeabi-v7a.apk\`：老款 32 位手机备用
+
+          ### 📺 电视版（横屏宽屏·遥控器适配）
+          - \`MiniReel-${VERSION}-tv-armeabi-v7a.apk\`：电视、电视盒子推荐（兼容性好）
+          - \`MiniReel-${VERSION}-tv-arm64-v8a.apk\`：新款 64 位电视盒子备用"
