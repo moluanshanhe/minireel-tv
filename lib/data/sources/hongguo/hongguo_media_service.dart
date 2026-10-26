@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/config/source_config.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/network/app_http_client.dart';
 import '../../../domain/models/playback_source.dart';
 import 'hongguo_app_client.dart';
 import 'hongguo_parser.dart';
