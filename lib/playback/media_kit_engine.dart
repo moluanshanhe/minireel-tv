@@ -150,9 +150,13 @@ final class _MediaKitPlayer implements PlaybackEngine {
             'decryption_key=${source.keyHex}',
         ].join(','),
       );
-      await native.setProperty('network-timeout', '20');
+      await native.setProperty('network-timeout', '15');
       await native.setProperty('cache', 'yes');
       await native.setProperty('cache-on-disk', 'no');
+      // 降低探测开销，极速首帧起播（短剧为标准格式，减少默认 5MB 探测的延迟）
+      await native.setProperty('demuxer-lavf-probesize', '65536');
+      await native.setProperty('demuxer-lavf-analyzeduration', '0.5');
+      await native.setProperty('force-seekable', 'yes');
 
       // 硬件解码策略：自动硬解(auto-safe) / 强制MediaCodec / 软解兼容(no)
       final hwdec = switch (_prefs.hardwareDecoding) {
@@ -173,8 +177,6 @@ final class _MediaKitPlayer implements PlaybackEngine {
       await native.setProperty('demuxer-max-back-bytes', '$backBytes');
       await native.setProperty('cache-secs', readaheadSecs);
       await native.setProperty('demuxer-readahead-secs', readaheadSecs);
-      await native.setProperty('demuxer-hysteresis-secs', '10');
-      await native.setProperty('demuxer-lavf-buffersize', '2097152');
     } else if (source.kind == PlaybackKind.cenc) {
       throw const AppException('当前设备暂不支持这个视频格式');
     }

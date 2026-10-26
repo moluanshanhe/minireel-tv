@@ -187,32 +187,41 @@ final class DramaRepository extends ChangeNotifier {
   );
 
   Future<void> loadCache() async {
-    for (final drama in await store.readCatalog()) {
+    final catalogFuture = store.readCatalog();
+    final refreshFuture = store.readLastRefresh();
+
+    final stateStore = store;
+    final stateFutures = <Future<void>>[];
+    if (stateStore is SourceStateStore) {
+      for (final source in registry.all.whereType<CursorCatalogSource>()) {
+        final id = (source as DramaSourceAdapter).id;
+        stateFutures.add(() async {
+          final states = await (stateStore as SourceStateStore)
+              .readSourceStatesByPrefix('catalog:$id:');
+          for (final entry in states.entries) {
+            final key = entry.key.replaceFirst('catalog:', '');
+            final state = entry.value;
+            if (state['cursor'] is Map<String, dynamic>) {
+              _cursors[key] = CatalogCursor.fromJson(
+                state['cursor'] as Map<String, dynamic>,
+              );
+              if (state['hasMore'] == false) _exhausted.add(key);
+            }
+          }
+        }());
+      }
+    }
+
+    final catalog = await catalogFuture;
+    for (final drama in catalog) {
       if (drama.coverUrl.contains('.heic')) {
         _catalog[drama.id] = drama.copyWith(coverUrl: '');
       } else {
         _catalog[drama.id] = drama;
       }
     }
-    lastRefresh = await store.readLastRefresh();
-    final stateStore = store;
-    if (stateStore is SourceStateStore) {
-      for (final source in registry.all.whereType<CursorCatalogSource>()) {
-        final id = (source as DramaSourceAdapter).id;
-        for (final channel in DramaChannel.values) {
-          final key = '$id:${channel.name}';
-          final state = await (stateStore as SourceStateStore).readSourceState(
-            'catalog:$key',
-          );
-          if (state?['cursor'] is Map<String, dynamic>) {
-            _cursors[key] = CatalogCursor.fromJson(
-              state!['cursor'] as Map<String, dynamic>,
-            );
-            if (state['hasMore'] == false) _exhausted.add(key);
-          }
-        }
-      }
-    }
+    lastRefresh = await refreshFuture;
+    await Future.wait(stateFutures);
     _notify();
   }
 

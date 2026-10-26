@@ -18,34 +18,53 @@ final class HongguoMediaService {
     String videoId, {
     CancelToken? cancelToken,
   }) async {
-    final result = await client.post(
-      '/novel/player/multi_video_model/preload/v1',
-      {
-        'biz_param': {
-          'detail_page_version': 0,
-          'device_level': 3,
-          'disable_digg_stat': false,
-          'need_all_video_definition': true,
-          'need_mp4_align': false,
-          'use_os_player': false,
-          'use_server_dns': false,
-          'video_platform': 1024,
-        },
-        'dr_scene': 'preload',
-        'mixed_video_id_map': {
-          '1004': [videoId],
-        },
-      },
-      cancelToken: cancelToken,
-    );
-    final data = objectMap(result['data']);
-    final entry = objectMap(
-      data[videoId] ??
-          (data.isNotEmpty && !data.containsKey('video_model')
-              ? data.values.first
-              : null),
-    );
-    final value = entry['video_model'] ?? data['video_model'];
+    dynamic value;
+    try {
+      final result = await client.post('/novel/player/video_model/v1/', {
+        'video_id': videoId,
+        'content_type': 1,
+        'biz_param': {'need_all_video_definition': true, 'video_platform': 3},
+      }, cancelToken: cancelToken);
+      value = objectMap(result['data'])['video_model'];
+    } catch (_) {
+      cancelToken?.throwIfCancellationRequested();
+    }
+
+    if (value == null) {
+      try {
+        final result = await client.post(
+          '/novel/player/multi_video_model/preload/v1',
+          {
+            'biz_param': {
+              'detail_page_version': 0,
+              'device_level': 3,
+              'disable_digg_stat': false,
+              'need_all_video_definition': true,
+              'need_mp4_align': false,
+              'use_os_player': false,
+              'use_server_dns': false,
+              'video_platform': 1024,
+            },
+            'dr_scene': 'preload',
+            'mixed_video_id_map': {
+              '1004': [videoId],
+            },
+          },
+          cancelToken: cancelToken,
+        );
+        final data = objectMap(result['data']);
+        final entry = objectMap(
+          data[videoId] ??
+              (data.isNotEmpty && !data.containsKey('video_model')
+                  ? data.values.first
+                  : null),
+        );
+        value = entry['video_model'] ?? data['video_model'];
+      } catch (_) {
+        cancelToken?.throwIfCancellationRequested();
+      }
+    }
+
     if (value == null) {
       throw const AppException('App 未返回视频播放数据');
     }

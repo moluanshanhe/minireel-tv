@@ -2,9 +2,9 @@ import 'package:flutter/services.dart';
 
 /// 遥控器逻辑动作。
 ///
-/// 所有 TV 遥控器交互都归约到这 7 个动作，物理按键到动作的映射
+/// 包含核心导航动作与专用播放控制动作，物理按键到动作的映射
 /// 由 [RemoteKeyMap] 配置，可在设置页由用户重新学习绑定，
-/// 解决部分遥控器按键映射不上的问题。
+/// 解决不同品牌电视、盒子遥控器键码不一致的问题。
 enum RemoteAction {
   up,
   down,
@@ -12,7 +12,12 @@ enum RemoteAction {
   right,
   ok,
   back,
-  menu;
+  menu,
+  playPause,
+  fastForward,
+  rewind,
+  nextEpisode,
+  prevEpisode;
 
   /// 用户可见的动作名称。
   String get label => switch (this) {
@@ -23,17 +28,40 @@ enum RemoteAction {
         RemoteAction.ok => '确认',
         RemoteAction.back => '返回',
         RemoteAction.menu => '菜单',
+        RemoteAction.playPause => '播放/暂停',
+        RemoteAction.fastForward => '快进',
+        RemoteAction.rewind => '快退',
+        RemoteAction.nextEpisode => '下一集',
+        RemoteAction.prevEpisode => '上一集',
       };
 
-  /// 动作说明（学习页提示用）。
+  /// 动作说明（设置与学习页提示用）。
   String get hint => switch (this) {
         RemoteAction.up => '方向键上',
         RemoteAction.down => '方向键下',
-        RemoteAction.left => '方向键左',
-        RemoteAction.right => '方向键右',
-        RemoteAction.ok => '中间 OK 键',
-        RemoteAction.back => '返回键',
-        RemoteAction.menu => '三条横键（菜单键）',
+        RemoteAction.left => '方向键左 / 快退',
+        RemoteAction.right => '方向键右 / 快进',
+        RemoteAction.ok => '中间 OK 键 / 播放暂停',
+        RemoteAction.back => '返回键 / 退出',
+        RemoteAction.menu => '三条横杠键（菜单键）',
+        RemoteAction.playPause => '独立播放/暂停键',
+        RemoteAction.fastForward => '独立快进按键',
+        RemoteAction.rewind => '独立快退按键',
+        RemoteAction.nextEpisode => '频道+ 或 下一曲按键',
+        RemoteAction.prevEpisode => '频道- 或 上一曲按键',
+      };
+
+  /// 是否属于基础导航动作（默认展示在第一组）。
+  bool get isNavigation => switch (this) {
+        RemoteAction.up ||
+        RemoteAction.down ||
+        RemoteAction.left ||
+        RemoteAction.right ||
+        RemoteAction.ok ||
+        RemoteAction.back ||
+        RemoteAction.menu =>
+          true,
+        _ => false,
       };
 }
 
@@ -41,46 +69,65 @@ enum RemoteAction {
 ///
 /// 一个动作可绑定多个物理键（兼容不同遥控器 + 键盘）。
 /// 默认映射覆盖常见遥控器与 Android TV 标准键码。
-/// 通过 [Preferences] 持久化，用户可在设置页重新学习。
+/// 通过 [Preferences] 持久化，用户可在设置页自由自定义。
 final class RemoteKeyMap {
   const RemoteKeyMap(this._bindings);
 
   /// action → keyId 集合。存 keyId（int）而非 LogicalKeyboardKey，
-  /// 因为 LogicalKeyboardKey 的序列化（keyLabel/usbHidUsage）在不同
-  /// Flutter 版本/平台间不稳定，keyId 是稳定的 32 位标识。
+  /// 因为 keyId 是跨平台稳定的 32/64 位唯一标识。
   final Map<RemoteAction, Set<int>> _bindings;
 
-  /// 默认映射：覆盖 Android TV 标准键 + 常见遥控器变体 + 键盘。
-  /// keyId 取自 Flutter keyboard_key.g.dart 的 LogicalKeyboardKey 定义。
-  factory RemoteKeyMap.defaults() => const RemoteKeyMap({
+  /// 默认映射：覆盖 Android TV 标准键 + 常见遥控器变体 + 媒体键 + 键盘。
+  factory RemoteKeyMap.defaults() => RemoteKeyMap({
         RemoteAction.up: {
-          0x00100000304, // arrowUp
+          LogicalKeyboardKey.arrowUp.keyId,
         },
         RemoteAction.down: {
-          0x00100000301, // arrowDown
+          LogicalKeyboardKey.arrowDown.keyId,
         },
         RemoteAction.left: {
-          0x00100000302, // arrowLeft
+          LogicalKeyboardKey.arrowLeft.keyId,
         },
         RemoteAction.right: {
-          0x00100000303, // arrowRight
+          LogicalKeyboardKey.arrowRight.keyId,
         },
         RemoteAction.ok: {
-          0x0010000050c, // select (DPad center)
-          0x0010000000d, // enter
-          0x00200000311, // gameButtonA
-          0x00000000020, // space
+          LogicalKeyboardKey.select.keyId,
+          LogicalKeyboardKey.enter.keyId,
+          LogicalKeyboardKey.gameButtonA.keyId,
+          LogicalKeyboardKey.space.keyId,
         },
         RemoteAction.back: {
-          0x0010000001b, // escape
-          0x00100001005, // goBack
+          LogicalKeyboardKey.escape.keyId,
+          LogicalKeyboardKey.goBack.keyId,
         },
         RemoteAction.menu: {
-          0x00100000505, // contextMenu
-          0x00100000801, // f1
-          0x00100000508, // help
-          0x00100001106, // tvContentsMenu
-          0x00100000d55, // mediaTopMenu
+          LogicalKeyboardKey.contextMenu.keyId,
+          LogicalKeyboardKey.f1.keyId,
+          LogicalKeyboardKey.help.keyId,
+          LogicalKeyboardKey.tvContentsMenu.keyId,
+          LogicalKeyboardKey.mediaTopMenu.keyId,
+        },
+        RemoteAction.playPause: {
+          LogicalKeyboardKey.mediaPlay.keyId,
+          LogicalKeyboardKey.mediaPause.keyId,
+          LogicalKeyboardKey.mediaPlayPause.keyId,
+        },
+        RemoteAction.fastForward: {
+          LogicalKeyboardKey.mediaFastForward.keyId,
+        },
+        RemoteAction.rewind: {
+          LogicalKeyboardKey.mediaRewind.keyId,
+        },
+        RemoteAction.nextEpisode: {
+          LogicalKeyboardKey.mediaTrackNext.keyId,
+          LogicalKeyboardKey.channelUp.keyId,
+          LogicalKeyboardKey.pageDown.keyId,
+        },
+        RemoteAction.prevEpisode: {
+          LogicalKeyboardKey.mediaTrackPrevious.keyId,
+          LogicalKeyboardKey.channelDown.keyId,
+          LogicalKeyboardKey.pageUp.keyId,
         },
       });
 
@@ -91,10 +138,23 @@ final class RemoteKeyMap {
           .whereType<LogicalKeyboardKey>()
           .toSet();
 
+  /// 该动作绑定的所有 keyId。
+  Set<int> keyIdsOf(RemoteAction action) => _bindings[action] ?? const {};
+
   /// 判断 [key] 是否触发 [action]。
   bool matches(RemoteAction action, LogicalKeyboardKey key) {
     final ids = _bindings[action];
     return ids != null && ids.contains(key.keyId);
+  }
+
+  /// 查找该按键当前所绑定的动作（用于按键测试与冲突检测）。
+  RemoteAction? findActionForKey(LogicalKeyboardKey key) {
+    for (final entry in _bindings.entries) {
+      if (entry.value.contains(key.keyId)) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 
   /// 给 [action] 追加一个物理键（去重）。返回新映射。
@@ -102,6 +162,22 @@ final class RemoteKeyMap {
     final next = Map<RemoteAction, Set<int>>.from(_bindings);
     final set = Set<int>.from(next[action] ?? const {});
     set.add(keyId);
+    next[action] = set;
+    return RemoteKeyMap(next);
+  }
+
+  /// 仅保留该物理键，覆盖 [action] 的旧绑定。返回新映射。
+  RemoteKeyMap setKey(RemoteAction action, int keyId) {
+    final next = Map<RemoteAction, Set<int>>.from(_bindings);
+    next[action] = {keyId};
+    return RemoteKeyMap(next);
+  }
+
+  /// 移除 [action] 的指定物理键。返回新映射。
+  RemoteKeyMap removeKey(RemoteAction action, int keyId) {
+    final next = Map<RemoteAction, Set<int>>.from(_bindings);
+    final set = Set<int>.from(next[action] ?? const {});
+    set.remove(keyId);
     next[action] = set;
     return RemoteKeyMap(next);
   }
@@ -124,19 +200,25 @@ final class RemoteKeyMap {
   String labelOf(RemoteAction action) {
     final keys = keysOf(action);
     if (keys.isEmpty) return '未设置';
-    return keys.map((k) => _keyLabel(k)).join(' / ');
+    return keys.map((k) => keyName(k)).join(' / ');
   }
 
   /// 生成可读按键名：优先用 keyLabel，去掉冗余前缀，未知键显示 keyId。
-  static String _keyLabel(LogicalKeyboardKey k) {
+  static String keyName(LogicalKeyboardKey k) {
     var label = k.keyLabel.trim();
     if (label.isEmpty) return '键 0x${k.keyId.toRadixString(16)}';
-    // 去掉 "Game Button" / "TV " 等冗余前缀，更简洁
     label = label
         .replaceFirst('Game Button ', '')
         .replaceFirst('TV ', '')
         .replaceFirst('Media ', '');
     return label;
+  }
+
+  /// 根据 keyId 生成可读按键名。
+  static String keyNameById(int keyId) {
+    final key = LogicalKeyboardKey.findKeyByKeyId(keyId);
+    if (key == null) return '键 0x${keyId.toRadixString(16)}';
+    return keyName(key);
   }
 
   Map<String, dynamic> toJson() => {
@@ -155,7 +237,8 @@ final class RemoteKeyMap {
             .where((id) => id != 0)
             .toSet();
       } else {
-        bindings[action] = const {};
+        // 如果旧数据没有新动作的字段，自动填入默认值以防功能失效
+        bindings[action] = RemoteKeyMap.defaults().keyIdsOf(action);
       }
     }
     return RemoteKeyMap(bindings);
@@ -164,17 +247,21 @@ final class RemoteKeyMap {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RemoteKeyMap &&
-          _deepEquals(_bindings, other._bindings);
+      other is RemoteKeyMap && _deepEquals(_bindings, other._bindings);
 
   @override
-  int get hashCode => Object.hashAll(_bindings.entries.map((e) => Object.hash(e.key, Object.hashAll(e.value))));
+  int get hashCode => Object.hashAll(
+      _bindings.entries.map((e) => Object.hash(e.key, Object.hashAll(e.value))));
 
-  static bool _deepEquals(Map<RemoteAction, Set<int>> a, Map<RemoteAction, Set<int>> b) {
+  static bool _deepEquals(
+      Map<RemoteAction, Set<int>> a, Map<RemoteAction, Set<int>> b) {
     if (a.length != b.length) return false;
     for (final key in a.keys) {
       final av = a[key], bv = b[key];
-      if (av == null || bv == null || av.length != bv.length || !av.containsAll(bv)) {
+      if (av == null ||
+          bv == null ||
+          av.length != bv.length ||
+          !av.containsAll(bv)) {
         return false;
       }
     }

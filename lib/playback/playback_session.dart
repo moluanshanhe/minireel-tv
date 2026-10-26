@@ -170,7 +170,15 @@ final class PlaybackSession extends ChangeNotifier {
     _requestedStart = resume;
     temporaryBoost = false;
     final targetEpisode = episodes[index];
-    final isSeamlessCandidate = resume == Duration.zero &&
+    final cached = startRoute == null && !fallbackOnly
+        ? await _prefetch.take(targetEpisode.id, token)
+        : null;
+    if (!_current(generation)) return;
+    if (cached == null) trimPreload();
+    _usedPrefetch = cached != null;
+
+    final isSeamlessCandidate = cached != null &&
+        resume == Duration.zero &&
         !fallbackOnly &&
         startRoute == null &&
         recoveryStep == 0 &&
@@ -196,12 +204,6 @@ final class PlaybackSession extends ChangeNotifier {
         await engine.stop();
         if (!_current(generation)) return;
       }
-      final cached = startRoute == null && !fallbackOnly
-          ? await _prefetch.take(targetEpisode.id, token)
-          : null;
-      if (!_current(generation)) return;
-      if (cached == null) trimPreload();
-      _usedPrefetch = cached != null;
       final resolved =
           cached ??
           await app.repository.resolve(

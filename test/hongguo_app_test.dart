@@ -21,6 +21,13 @@ class _StateStore extends MemoryStore implements SourceStateStore {
   @override
   Future<Map<String, dynamic>?> readSourceState(String key) async => state[key];
   @override
+  Future<Map<String, Map<String, dynamic>>> readSourceStatesByPrefix(
+    String prefix,
+  ) async => {
+    for (final e in state.entries)
+      if (e.key.startsWith(prefix)) e.key: e.value,
+  };
+  @override
   Future<void> saveSourceState(String key, Map<String, dynamic> value) async {
     state[key] = value;
   }

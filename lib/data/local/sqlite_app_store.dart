@@ -38,6 +38,13 @@ final class SqliteAppStore implements AppStore, SourceStateStore {
       file,
       options: OpenDatabaseOptions(
         version: 1,
+        onConfigure: (db) async {
+          // 启用 WAL 模式和快速同步，大幅提升 Android 闪存上的读写与并发吞吐量
+          await db.execute('PRAGMA journal_mode = WAL');
+          await db.execute('PRAGMA synchronous = NORMAL');
+          await db.execute('PRAGMA temp_store = MEMORY');
+          await db.execute('PRAGMA mmap_size = 33554432');
+        },
         onCreate: (db, version) async {
           await db.execute(
             'CREATE TABLE catalog (id TEXT PRIMARY KEY, source TEXT NOT NULL, payload TEXT NOT NULL)',
@@ -53,6 +60,26 @@ final class SqliteAppStore implements AppStore, SourceStateStore {
           );
           await db.execute(
             'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_history_updated ON history(updated_at DESC)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_favorites_created ON favorites(created_at DESC)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_catalog_source ON catalog(source)',
+          );
+        },
+        onOpen: (db) async {
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_history_updated ON history(updated_at DESC)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_favorites_created ON favorites(created_at DESC)',
+          );
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_catalog_source ON catalog(source)',
           );
         },
       ),
@@ -125,6 +152,28 @@ final class SqliteAppStore implements AppStore, SourceStateStore {
   @override
   Future<Map<String, dynamic>?> readSourceState(String key) async =>
       (await _readSetting('source:$key')) as Map<String, dynamic>?;
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> readSourceStatesByPrefix(
+    String prefix,
+  ) async {
+    final rows = await _db.query(
+      'settings',
+      where: 'key LIKE ?',
+      whereArgs: ['source:$prefix%'],
+    );
+    final results = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final key = (row['key'] as String).replaceFirst('source:', '');
+      try {
+        final decoded = jsonDecode(row['value'] as String);
+        if (decoded is Map<String, dynamic>) {
+          results[key] = decoded;
+        }
+      } catch (_) {}
+    }
+    return results;
+  }
 
   @override
   Future<void> saveSourceState(String key, Map<String, dynamic> value) =>
