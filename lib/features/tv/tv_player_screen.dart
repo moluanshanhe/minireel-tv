@@ -302,8 +302,9 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
     _session.hold('sheet');
     setState(() => _sheetOpen = true);
     _sessionChanged();
+    String? action;
     try {
-      await showReelSheet<void>(
+      action = await showReelSheet<String>(
         context,
         dark: true,
         builder: (context) => ListenableBuilder(
@@ -317,6 +318,9 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
         _session.release('sheet');
         _showControls();
       }
+    }
+    if (action == 'exit' && mounted) {
+      _exit();
     }
   }
 
@@ -396,15 +400,32 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
             ),
           ),
         const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _exit();
-            },
-            icon: const Icon(Icons.logout_rounded, size: 19),
-            label: const Text('退出播放'),
+        TVFocusable(
+          radius: 12,
+          onTap: () => Navigator.of(context).pop('exit'),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.logout_rounded, size: 18, color: Colors.white70),
+                SizedBox(width: 8),
+                Text(
+                  '退出播放',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -775,7 +796,14 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
   void _exit() {
     if (_closing) return;
     _cleanup();
-    if (mounted) Navigator.of(context).maybePop();
+    if (mounted) {
+      final nav = Navigator.of(context);
+      if (nav.canPop()) {
+        nav.pop();
+      } else {
+        nav.maybePop();
+      }
+    }
   }
 
   @override
