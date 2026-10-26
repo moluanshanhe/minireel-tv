@@ -127,10 +127,11 @@ class DramaCard extends StatelessWidget {
   final bool interactive;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: '${drama.title}，${drama.episodeLabel}',
-    child: Material(
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: Semantics(
+      button: true,
+      label: '${drama.title}，${drama.episodeLabel}',
+      child: Material(
       color: context.colors.surface,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
@@ -248,7 +249,8 @@ class DramaCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+  ),
+);
 }
 
 class TagPill extends StatelessWidget {

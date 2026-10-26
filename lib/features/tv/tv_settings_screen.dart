@@ -708,6 +708,6 @@ class _TVSettingsScreenState extends State<TVSettingsScreen> {
     final bound = RemoteAction.values
         .where((a) => map.countOf(a) > 0)
         .length;
-    return '已自定义 $bound/7';
+    return '已自定义 ($bound/${RemoteAction.values.length})';
   }
 }

@@ -823,13 +823,19 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
       unawaited(_openMenu());
       return KeyEventResult.handled;
     }
-    // OK/ENTER/SPACE → 播放/暂停（同时确保控件可见）
-    if (keyMap.matches(RemoteAction.ok, key)) {
+    // OK/ENTER/SPACE/播放暂停键 → 播放/暂停（同时确保控件可见）
+    if (keyMap.matches(RemoteAction.ok, key) ||
+        keyMap.matches(RemoteAction.playPause, key) ||
+        key == LogicalKeyboardKey.mediaPlay ||
+        key == LogicalKeyboardKey.mediaPause ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
       _togglePlay();
       return KeyEventResult.handled;
     }
-    // 左 → 快退
-    if (keyMap.matches(RemoteAction.left, key)) {
+    // 左 / 快退键 → 快退
+    if (keyMap.matches(RemoteAction.left, key) ||
+        keyMap.matches(RemoteAction.rewind, key) ||
+        key == LogicalKeyboardKey.mediaRewind) {
       if (!_controlsVisible) {
         _showControls();
         return KeyEventResult.handled;
@@ -837,8 +843,10 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
       _seekBy(-step);
       return KeyEventResult.handled;
     }
-    // 右 → 快进
-    if (keyMap.matches(RemoteAction.right, key)) {
+    // 右 / 快进键 → 快进
+    if (keyMap.matches(RemoteAction.right, key) ||
+        keyMap.matches(RemoteAction.fastForward, key) ||
+        key == LogicalKeyboardKey.mediaFastForward) {
       if (!_controlsVisible) {
         _showControls();
         return KeyEventResult.handled;
@@ -846,8 +854,9 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
       _seekBy(step);
       return KeyEventResult.handled;
     }
-    // 上 → 上一集（到顶提示）
-    if (keyMap.matches(RemoteAction.up, key)) {
+    // 上 / 上一集键 → 上一集（到顶提示）
+    if (keyMap.matches(RemoteAction.up, key) ||
+        keyMap.matches(RemoteAction.prevEpisode, key)) {
       if (!_controlsVisible) {
         _showControls();
         return KeyEventResult.handled;
@@ -855,27 +864,14 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
       _changeEpisode(false);
       return KeyEventResult.handled;
     }
-    // 下 → 下一集（到底提示）
-    if (keyMap.matches(RemoteAction.down, key)) {
+    // 下 / 下一集键 → 下一集（到底提示）
+    if (keyMap.matches(RemoteAction.down, key) ||
+        keyMap.matches(RemoteAction.nextEpisode, key)) {
       if (!_controlsVisible) {
         _showControls();
         return KeyEventResult.handled;
       }
       _changeEpisode(true);
-      return KeyEventResult.handled;
-    }
-    // 媒体键
-    if (key == LogicalKeyboardKey.mediaPlay ||
-        key == LogicalKeyboardKey.mediaPause) {
-      _togglePlay();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.mediaFastForward) {
-      _seekBy(step);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.mediaRewind) {
-      _seekBy(-step);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;

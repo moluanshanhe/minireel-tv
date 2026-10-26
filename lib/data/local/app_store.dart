@@ -6,6 +6,9 @@ import '../../domain/models/watch_record.dart';
 /// Optional persistent source state; old adapters/stores remain compatible.
 abstract interface class SourceStateStore {
   Future<Map<String, dynamic>?> readSourceState(String key);
+  Future<Map<String, Map<String, dynamic>>> readSourceStatesByPrefix(
+    String prefix,
+  );
   Future<void> saveSourceState(String key, Map<String, dynamic> value);
   Future<void> saveCatalogPage(
     String key,

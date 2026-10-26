@@ -79,14 +79,18 @@ class _MiniReelBootstrapState extends State<MiniReelBootstrap> {
   }
 
   Future<AppController> _initialize() async {
-    final raw =
-        jsonDecode(await rootBundle.loadString('assets/config/sources.json'))
-            as Map<String, dynamic>;
-    final config = SourceConfig.fromJson(
-      raw['sources']['hongguo'] as Map<String, dynamic>,
-    );
+    final configFuture =
+        rootBundle.loadString('assets/config/sources.json').then((str) {
+      final raw = jsonDecode(str) as Map<String, dynamic>;
+      return SourceConfig.fromJson(
+        raw['sources']['hongguo'] as Map<String, dynamic>,
+      );
+    });
+    final storeFuture = SqliteAppStore.open();
+
+    final config = await configFuture;
     final http = _http = AppHttpClient(config);
-    final store = await SqliteAppStore.open();
+    final store = await storeFuture;
     try {
       final repository = DramaRepository(
         SourceRegistry([
