@@ -110,8 +110,9 @@ class _TVPlayerScreenState extends State<TVPlayerScreen>
         }
         _changeEpisode(true);
       case RemoteAction.ok:
-      case RemoteAction.back:
-      case RemoteAction.menu:
+      case RemoteAction.playPause:
+        _togglePlay();
+      default:
         break;
     }
   }
