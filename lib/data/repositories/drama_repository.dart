@@ -187,42 +187,47 @@ final class DramaRepository extends ChangeNotifier {
   );
 
   Future<void> loadCache() async {
-    final catalogFuture = store.readCatalog();
-    final refreshFuture = store.readLastRefresh();
-
-    final stateStore = store;
-    final stateFutures = <Future<void>>[];
-    if (stateStore is SourceStateStore) {
-      for (final source in registry.all.whereType<CursorCatalogSource>()) {
-        final id = (source as DramaSourceAdapter).id;
-        stateFutures.add(() async {
-          final states = await (stateStore as SourceStateStore)
-              .readSourceStatesByPrefix('catalog:$id:');
-          for (final entry in states.entries) {
-            final key = entry.key.replaceFirst('catalog:', '');
-            final state = entry.value;
-            if (state['cursor'] is Map<String, dynamic>) {
-              _cursors[key] = CatalogCursor.fromJson(
-                state['cursor'] as Map<String, dynamic>,
-              );
-              if (state['hasMore'] == false) _exhausted.add(key);
-            }
-          }
-        }());
+    try {
+      final stateStore = store;
+      final stateFutures = <Future<void>>[];
+      if (stateStore is SourceStateStore) {
+        for (final source in registry.all.whereType<CursorCatalogSource>()) {
+          final id = (source as DramaSourceAdapter).id;
+          stateFutures.add(() async {
+            try {
+              final states = await (stateStore as SourceStateStore)
+                  .readSourceStatesByPrefix('catalog:$id:');
+              for (final entry in states.entries) {
+                final key = entry.key.replaceFirst('catalog:', '');
+                final state = entry.value;
+                if (state['cursor'] is Map) {
+                  _cursors[key] = CatalogCursor.fromJson(
+                    Map<String, dynamic>.from(state['cursor'] as Map),
+                  );
+                  if (state['hasMore'] == false) _exhausted.add(key);
+                }
+              }
+            } catch (_) {}
+          }());
+        }
       }
-    }
 
-    final catalog = await catalogFuture;
-    for (final drama in catalog) {
-      if (drama.coverUrl.contains('.heic')) {
-        _catalog[drama.id] = drama.copyWith(coverUrl: '');
-      } else {
-        _catalog[drama.id] = drama;
+      final catalog = await store.readCatalog();
+      for (final drama in catalog) {
+        if (drama.coverUrl.contains('.heic')) {
+          _catalog[drama.id] = drama.copyWith(coverUrl: '');
+        } else {
+          _catalog[drama.id] = drama;
+        }
       }
-    }
-    lastRefresh = await refreshFuture;
-    await Future.wait(stateFutures);
-    _notify();
+      try {
+        lastRefresh = await store.readLastRefresh();
+      } catch (_) {}
+      try {
+        await Future.wait(stateFutures);
+      } catch (_) {}
+      _notify();
+    } catch (_) {}
   }
 
   Future<void> loadInitial() => refresh();

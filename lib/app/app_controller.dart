@@ -26,17 +26,13 @@ final class AppController extends ChangeNotifier {
   Future<void> _writes = Future.value();
 
   Future<void> initialize() async {
-    final results = await Future.wait([
-      store.readPreferences(),
-      store.readFavorites(),
-      store.readHistory(),
-      store.readSearches(),
-      repository.loadCache(),
-    ]);
-    preferences = results[0] as Preferences;
-    favorites = results[1] as List<Drama>;
-    history = results[2] as List<WatchRecord>;
-    searches = results[3] as List<String>;
+    preferences = await store.readPreferences();
+    favorites = await store.readFavorites();
+    history = await store.readHistory();
+    searches = await store.readSearches();
+    try {
+      await repository.loadCache();
+    } catch (_) {}
   }
 
   bool isFavorite(String id) => favorites.any((drama) => drama.id == id);

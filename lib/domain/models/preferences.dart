@@ -201,7 +201,9 @@ final class Preferences {
         : .75,
     prefetchNextEpisode: json['prefetchNextEpisode'] != false,
     remoteKeyMap: json['remoteKeyMap'] is Map
-        ? RemoteKeyMap.fromJson(json['remoteKeyMap'] as Map<String, dynamic>)
+        ? RemoteKeyMap.fromJson(
+            Map<String, dynamic>.from(json['remoteKeyMap'] as Map),
+          )
         : null,
     controlsAutoHideSeconds: json['controlsAutoHideSeconds'] is num
         ? (json['controlsAutoHideSeconds'] as num).toInt()

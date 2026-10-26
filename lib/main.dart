@@ -79,18 +79,14 @@ class _MiniReelBootstrapState extends State<MiniReelBootstrap> {
   }
 
   Future<AppController> _initialize() async {
-    final configFuture =
-        rootBundle.loadString('assets/config/sources.json').then((str) {
-      final raw = jsonDecode(str) as Map<String, dynamic>;
-      return SourceConfig.fromJson(
-        raw['sources']['hongguo'] as Map<String, dynamic>,
-      );
-    });
-    final storeFuture = SqliteAppStore.open();
-
-    final config = await configFuture;
+    final raw =
+        jsonDecode(await rootBundle.loadString('assets/config/sources.json'))
+            as Map<String, dynamic>;
+    final config = SourceConfig.fromJson(
+      raw['sources']['hongguo'] as Map<String, dynamic>,
+    );
     final http = _http = AppHttpClient(config);
-    final store = await storeFuture;
+    final store = await SqliteAppStore.open();
     try {
       final repository = DramaRepository(
         SourceRegistry([
@@ -169,7 +165,9 @@ class _MiniReelBootstrapState extends State<MiniReelBootstrap> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    snapshot.hasError ? '本地数据暂时无法读取，请检查可用存储空间' : '好故事，随时开场',
+                    snapshot.hasError
+                        ? '本地数据暂时无法读取 (${snapshot.error})'
+                        : '好故事，随时开场',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
